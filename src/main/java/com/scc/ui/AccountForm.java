@@ -50,12 +50,14 @@ public class AccountForm {
         }
     }
 
-    // Password of at least 8 characters, typed twice.
+    // Password of exactly 4 characters (letters or numbers), typed twice.
+    public static final int PASSWORD_LENGTH = 4;
+
     public String readNewPassword() {
         while (true) {
-            String password = input.readNonEmpty("Password (at least 8 characters): ");
-            if (password.length() < 8) {
-                System.out.println("The password is too short. Use at least 8 characters.");
+            String password = input.readNonEmpty("Password (exactly " + PASSWORD_LENGTH + " letters or numbers): ");
+            if (!password.matches("[A-Za-z0-9]{" + PASSWORD_LENGTH + "}")) {
+                System.out.println("Invalid password. Use exactly " + PASSWORD_LENGTH + " letters or numbers (no spaces or symbols).");
                 continue;
             }
             String confirm = input.readNonEmpty("Confirm Password: ");

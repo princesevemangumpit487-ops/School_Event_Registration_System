@@ -16,12 +16,13 @@ public class StudentMenu {
     private final InputHelper input;
     private final EventDao eventDao = new EventDao();
     private final RegistrationDao registrationDao = new RegistrationDao();
-    private final UserDao userDao = new UserDao();
+    private final UserDao userDao;
     private final EventBrowser browser;
     private final AccountForm form;
 
-    public StudentMenu(InputHelper input) {
+    public StudentMenu(InputHelper input, UserDao userDao) {
         this.input = input;
+        this.userDao = userDao;
         this.browser = new EventBrowser(input, eventDao);
         this.form = new AccountForm(input, userDao);
     }

@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -123,6 +124,9 @@ public class UserDao {
     // studentNumber and course are only used when the role is STUDENT (pass null otherwise).
     public User register(String fullName, String contact, String username, String password, String role,
                          String studentNumber, String course) throws SQLException {
+        if (!User.ROLE_STUDENT.equals(role)) { // only students can sign themselves up
+            throw new IllegalArgumentException("Only student accounts can be registered here. Ask an admin for other accounts.");
+        }
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
@@ -154,6 +158,10 @@ public class UserDao {
     // Saves a user row and returns the new user ID. Only the password HASH is saved.
     private int insertUser(Connection conn, String fullName, String contact, String username, String password,
                            String role, String status, String studentNumber, String course) throws SQLException {
+        // Students get their number automatically (example: 2026-001) when none is given.
+        if (User.ROLE_STUDENT.equals(role) && (studentNumber == null || studentNumber.isBlank())) {
+            studentNumber = nextStudentNumber(conn);
+        }
         String sql = "INSERT INTO users (full_name, contact_number, username, password_hash, role, "
                 + "account_status, created_at, student_number, course) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -169,6 +177,21 @@ public class UserDao {
             ps.executeUpdate();
         }
         return DatabaseConnection.lastInsertId(conn);
+    }
+
+    // Next student number for this year: YEAR-001, YEAR-002, ... (continues after the highest one saved).
+    private String nextStudentNumber(Connection conn) throws SQLException {
+        String prefix = LocalDate.now().getYear() + "-";
+        String sql = "SELECT COALESCE(MAX(CAST(SUBSTR(student_number, ?) AS INTEGER)), 0) "
+                + "FROM users WHERE student_number LIKE ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, prefix.length() + 1);
+            ps.setString(2, prefix + "%");
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return String.format("%s%03d", prefix, rs.getInt(1) + 1);
+            }
+        }
     }
 
     // ---------- Admin: account management ----------

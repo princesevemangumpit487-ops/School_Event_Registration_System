@@ -11,11 +11,12 @@ import java.util.List;
  */
 public class UserMenu {
     private final InputHelper input;
-    private final UserDao userDao = new UserDao();
+    private final UserDao userDao;
     private final AccountForm form;
 
-    public UserMenu(InputHelper input) {
+    public UserMenu(InputHelper input, UserDao userDao) {
         this.input = input;
+        this.userDao = userDao;
         this.form = new AccountForm(input, userDao);
     }
 
@@ -23,7 +24,7 @@ public class UserMenu {
         boolean back = false;
         while (!back) {
             InputHelper.header("MANAGE USERS");
-            System.out.println("1. Create Account (Student or Staff)");
+            System.out.println("1. Create Account (Student, Staff or Admin)");
             System.out.println("2. View Users");
             System.out.println("3. Search Users");
             System.out.println("4. Edit User");
@@ -64,29 +65,32 @@ public class UserMenu {
         }
     }
 
-    // Admin creates a Student or Staff account. It is ACTIVE immediately.
+    // Admin creates a Student, Staff, or Admin account. It is ACTIVE immediately.
+    // Student numbers are generated automatically.
     private void createAccount(User admin) throws SQLException {
         InputHelper.header("CREATE ACCOUNT");
         System.out.println("1. Student");
         System.out.println("2. Event Staff");
-        System.out.println("3. Back");
-        int choice = input.readMenuChoice("Enter your choice: ", 1, 3);
-        if (choice == 3) {
+        System.out.println("3. Admin");
+        System.out.println("4. Back");
+        int choice = input.readMenuChoice("Enter your choice: ", 1, 4);
+        if (choice == 4) {
             return;
         }
-        String role = choice == 1 ? User.ROLE_STUDENT : User.ROLE_STAFF;
+        String role = choice == 1 ? User.ROLE_STUDENT : (choice == 2 ? User.ROLE_STAFF : User.ROLE_ADMIN);
         String fullName = input.readNonEmpty("Full Name: ");
         String contact = form.readContact("Contact Number: ");
-        String studentNumber = null;
         String course = null;
         if (choice == 1) {
-            studentNumber = form.readNewStudentNumber("Student Number: ");
             course = input.readNonEmpty("Course: ");
         }
         String username = form.readNewUsername();
         String password = form.readNewPassword();
-        int newId = userDao.createAccount(admin, fullName, contact, username, password, role, studentNumber, course);
+        int newId = userDao.createAccount(admin, fullName, contact, username, password, role, null, course);
         System.out.println("Account created successfully (status ACTIVE). User ID: " + newId);
+        if (choice == 1) {
+            System.out.println("Student Number: " + userDao.findById(newId).studentNumber());
+        }
     }
 
     private void viewUsers(User admin) throws SQLException {

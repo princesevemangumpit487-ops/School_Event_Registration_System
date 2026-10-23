@@ -8,17 +8,18 @@ import java.sql.SQLException;
 /** The Admin dashboard: events, users, all registrations, report, activity log, and system overview. */
 public class AdminMenu {
     private final InputHelper input;
-    private final UserDao userDao = new UserDao();
+    private final UserDao userDao;
     private final RegistrationDao registrationDao = new RegistrationDao();
     private final EventMenu eventMenu;
     private final UserMenu userMenu;
     private final ReportMenu reportMenu;
     private final LogMenu logMenu;
 
-    public AdminMenu(InputHelper input) {
+    public AdminMenu(InputHelper input, UserDao userDao) {
         this.input = input;
+        this.userDao = userDao;
         this.eventMenu = new EventMenu(input);
-        this.userMenu = new UserMenu(input);
+        this.userMenu = new UserMenu(input, userDao);
         this.reportMenu = new ReportMenu(input);
         this.logMenu = new LogMenu(input);
     }
