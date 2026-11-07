@@ -50,16 +50,11 @@ public class AccountForm {
         }
     }
 
-    // Password of exactly 4 characters (letters or numbers), typed twice.
-    public static final int PASSWORD_LENGTH = 4;
-
+    // Any password the user wants (any length, letters, numbers, spaces inside, or symbols), typed twice.
+    // It only cannot be empty. Spaces at the very start or end are removed, the same way at login.
     public String readNewPassword() {
         while (true) {
-            String password = input.readNonEmpty("Password (exactly " + PASSWORD_LENGTH + " letters or numbers): ");
-            if (!password.matches("[A-Za-z0-9]{" + PASSWORD_LENGTH + "}")) {
-                System.out.println("Invalid password. Use exactly " + PASSWORD_LENGTH + " letters or numbers (no spaces or symbols).");
-                continue;
-            }
+            String password = input.readNonEmpty("Password: ");
             String confirm = input.readNonEmpty("Confirm Password: ");
             if (confirm.equals(password)) {
                 return password;

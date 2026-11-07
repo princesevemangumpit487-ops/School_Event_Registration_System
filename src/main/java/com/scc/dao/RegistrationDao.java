@@ -91,7 +91,9 @@ public class RegistrationDao {
                     ps.executeUpdate();
                 }
                 int registrationId = DatabaseConnection.lastInsertId(conn);
-                logDao.addLog(conn, student.userId(), "Registered for " + eventName, eventId, registrationId);
+                logDao.logAction(conn, student.userId(), "EVENT_REGISTERED", "Student " + student.fullName() + " (ID: "
+                        + student.userId() + ") registered for event: " + eventName + " - Registration #"
+                        + registrationId, eventId, registrationId);
                 conn.commit();
                 return new RegisterResult(RegisterResult.Outcome.REGISTERED, registrationId);
             } catch (SQLException e) {
@@ -125,7 +127,7 @@ public class RegistrationDao {
             return false;
         }
         return setStatusIfCurrent(student.userId(), reg, Registration.STATUS_PENDING,
-                Registration.STATUS_CANCELLED, "Cancelled registration for " + reg.eventName());
+                Registration.STATUS_CANCELLED, "REG_CANCELLED");
     }
 
     // =====================================================================
@@ -182,7 +184,7 @@ public class RegistrationDao {
                     rows = ps.executeUpdate();
                 }
                 if (rows == 1) {
-                    logDao.addLog(conn, staff.userId(), "Approved registration for " + reg.eventName(),
+                    logDao.logAction(conn, staff.userId(), "REG_APPROVED", statusText(reg, Registration.STATUS_APPROVED),
                             reg.eventId(), registrationId);
                     conn.commit();
                     return StatusResult.CHANGED;
@@ -212,7 +214,7 @@ public class RegistrationDao {
             return StatusResult.INVALID_CHANGE;
         }
         boolean saved = setStatusIfCurrent(staff.userId(), reg, Registration.STATUS_PENDING,
-                Registration.STATUS_REJECTED, "Rejected registration for " + reg.eventName());
+                Registration.STATUS_REJECTED, "REG_REJECTED");
         return saved ? StatusResult.CHANGED : StatusResult.ALREADY_CHANGED;
     }
 
@@ -237,8 +239,7 @@ public class RegistrationDao {
                 return StatusResult.DUPLICATE; // the student registered again after the rejection
             }
         }
-        boolean saved = setStatusIfCurrent(staff.userId(), reg, reg.status(), newStatus,
-                "Changed registration status from " + reg.status() + " to " + newStatus + " (" + reg.eventName() + ")");
+        boolean saved = setStatusIfCurrent(staff.userId(), reg, reg.status(), newStatus, "REG_STATUS_CHANGED");
         return saved ? StatusResult.CHANGED : StatusResult.ALREADY_CHANGED;
     }
 
@@ -258,8 +259,8 @@ public class RegistrationDao {
                     ps.setInt(2, registrationId);
                     ps.executeUpdate();
                 }
-                logDao.addLog(conn, staff.userId(), "Updated registration information (date)",
-                        reg.eventId(), registrationId);
+                logDao.logAction(conn, staff.userId(), "REG_UPDATED",
+                        "Updated Registration #" + registrationId + " date to " + newDate, reg.eventId(), registrationId);
                 conn.commit();
                 return true;
             } catch (SQLException e) {
@@ -284,8 +285,8 @@ public class RegistrationDao {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                logDao.addLog(conn, admin.userId(), "Removed invalid registration record (ID " + registrationId + ", "
-                        + reg.studentName() + ", " + reg.eventName() + ")", reg.eventId(), null);
+                logDao.logAction(conn, admin.userId(), "REG_REMOVED", "Removed invalid registration record (ID "
+                        + registrationId + ", " + reg.studentName() + ", " + reg.eventName() + ")", reg.eventId(), null);
                 int rows;
                 try (PreparedStatement ps = conn.prepareStatement("DELETE FROM registrations WHERE registration_id = ?")) {
                     ps.setInt(1, registrationId);
@@ -311,7 +312,7 @@ public class RegistrationDao {
     // Changes the status and writes the log in one transaction.
     // "AND status = ?" makes sure the registration still has the status that was shown on screen.
     private boolean setStatusIfCurrent(int actorId, Registration reg, String oldStatus, String newStatus,
-                                       String logText) throws SQLException {
+                                       String actionType) throws SQLException {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
@@ -327,7 +328,7 @@ public class RegistrationDao {
                     conn.rollback();
                     return false;
                 }
-                logDao.addLog(conn, actorId, logText, reg.eventId(), reg.registrationId());
+                logDao.logAction(conn, actorId, actionType, statusText(reg, newStatus), reg.eventId(), reg.registrationId());
                 conn.commit();
                 return true;
             } catch (SQLException e) {
@@ -335,6 +336,12 @@ public class RegistrationDao {
                 throw e;
             }
         }
+    }
+
+    // Log text for a status change, example: Updated Registration #5 status from PENDING to APPROVED (Foundation Day)
+    private String statusText(Registration reg, String newStatus) {
+        return "Updated Registration #" + reg.registrationId() + " status from " + reg.status().toUpperCase()
+                + " to " + newStatus.toUpperCase() + " (" + reg.eventName() + ")";
     }
 
     private Registration firstOrNull(List<Registration> list) {

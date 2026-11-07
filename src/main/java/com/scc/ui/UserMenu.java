@@ -104,7 +104,7 @@ public class UserMenu {
         showUsers(userDao.findAll(admin, role, null, null));
     }
 
-    private void showUsers(List<User> users) {
+    void showUsers(List<User> users) { // package-private so AdminMenu can reuse the same table
         System.out.println();
         if (users.isEmpty()) {
             System.out.println("No accounts found.");
@@ -206,10 +206,11 @@ public class UserMenu {
         System.out.println("3. Back");
         int choice = input.readMenuChoice("Enter your choice: ", 1, 3);
         if (choice == 1) {
-            userDao.setStatus(admin, target, User.STATUS_ACTIVE, "User account approved: " + target.username());
+            userDao.approveUser(admin, target);
             System.out.println("Account approved. The user can now log in.");
         } else if (choice == 2) {
-            userDao.setStatus(admin, target, User.STATUS_INACTIVE, "User account rejected: " + target.username());
+            userDao.setStatus(admin, target, User.STATUS_INACTIVE, "USER_REJECTED",
+                    "Admin [" + admin.userId() + "] rejected User [" + target.userId() + "]");
             System.out.println("Account rejected. The record is kept.");
         }
     }
@@ -236,8 +237,9 @@ public class UserMenu {
             return;
         }
         String newStatus = deactivate ? User.STATUS_INACTIVE : User.STATUS_ACTIVE;
-        String logText = (deactivate ? "User account deactivated: " : "User account activated: ") + target.username();
-        if (userDao.setStatus(admin, target, newStatus, logText)) {
+        String logText = "Admin [" + admin.userId() + "] " + (deactivate ? "deactivated" : "activated")
+                + " User [" + target.userId() + "] (" + target.username() + ")";
+        if (userDao.setStatus(admin, target, newStatus, "USER_UPDATED", logText)) {
             System.out.println(deactivate
                     ? "Account deactivated. The record is kept, but the user can no longer log in."
                     : "Account activated.");

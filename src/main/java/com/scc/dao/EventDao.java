@@ -42,7 +42,7 @@ public class EventDao {
                     ps.executeUpdate();
                 }
                 int eventId = DatabaseConnection.lastInsertId(conn);
-                logDao.addLog(conn, admin.userId(), "Created event: " + name, eventId, null);
+                logDao.logAction(conn, admin.userId(), "EVENT_CREATED", "Created event: " + name, eventId, null);
                 conn.commit();
                 return eventId;
             } catch (SQLException e) {
@@ -90,7 +90,7 @@ public class EventDao {
     private boolean updateText(User admin, Event event, String column, String value, String what) throws SQLException {
         Permissions.require(admin, User.ROLE_ADMIN);
         String sql = "UPDATE events SET " + column + " = ? WHERE event_id = ? AND event_status = 'ACTIVE'";
-        return updateAndLog(admin, event.eventId(), sql, new Object[] {value, event.eventId()},
+        return updateAndLog(admin, event.eventId(), sql, new Object[] {value, event.eventId()}, "EVENT_UPDATED",
                 "Updated event: " + event.eventName() + " (" + what + " updated)");
     }
 
@@ -105,7 +105,7 @@ public class EventDao {
                 + "AND (SELECT COUNT(*) FROM registrations r WHERE r.event_id = events.event_id "
                 + "AND r.status = 'Approved') <= ?";
         return updateAndLog(admin, event.eventId(), sql, new Object[] {newCapacity, event.eventId(), newCapacity},
-                "Updated event: " + event.eventName() + " (capacity changed to " + newCapacity + ")");
+                "EVENT_UPDATED", "Updated event: " + event.eventName() + " (capacity changed to " + newCapacity + ")");
     }
 
     // ---------- Remove (Admin, soft delete) ----------
@@ -113,14 +113,15 @@ public class EventDao {
     public boolean remove(User admin, Event event) throws SQLException {
         Permissions.require(admin, User.ROLE_ADMIN);
         String sql = "UPDATE events SET event_status = 'REMOVED' WHERE event_id = ? AND event_status = 'ACTIVE'";
-        return updateAndLog(admin, event.eventId(), sql, new Object[] {event.eventId()},
+        return updateAndLog(admin, event.eventId(), sql, new Object[] {event.eventId()}, "EVENT_REMOVED",
                 "Removed event: " + event.eventName());
     }
 
     // ---------- Helpers ----------
 
     // Runs one UPDATE and writes its log in one transaction. Returns false if no row was changed.
-    private boolean updateAndLog(User admin, int eventId, String sql, Object[] params, String logText) throws SQLException {
+    private boolean updateAndLog(User admin, int eventId, String sql, Object[] params, String actionType,
+                                 String logText) throws SQLException {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
@@ -133,7 +134,7 @@ public class EventDao {
                     conn.rollback();
                     return false;
                 }
-                logDao.addLog(conn, admin.userId(), logText, eventId, null);
+                logDao.logAction(conn, admin.userId(), actionType, logText, eventId, null);
                 conn.commit();
                 return true;
             } catch (SQLException e) {

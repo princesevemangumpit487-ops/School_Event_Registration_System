@@ -4,8 +4,9 @@ import com.scc.dao.RegistrationDao;
 import com.scc.dao.UserDao;
 import com.scc.model.User;
 import java.sql.SQLException;
+import java.util.List;
 
-/** The Admin dashboard: events, users, all registrations, report, activity log, and system overview. */
+/** The Admin dashboard: events, users, role / status updates, all registrations, report, audit logs, and system overview. */
 public class AdminMenu {
     private final InputHelper input;
     private final UserDao userDao;
@@ -33,12 +34,13 @@ public class AdminMenu {
             System.out.println();
             System.out.println("1. Manage Events");
             System.out.println("2. Manage Users");
-            System.out.println("3. View All Registrations");
-            System.out.println("4. Event Registration Report");
-            System.out.println("5. Registration Activity Logs");
-            System.out.println("6. System Overview");
-            System.out.println("7. Logout");
-            int choice = input.readMenuChoice("Enter your choice: ", 1, 7);
+            System.out.println("3. Update User Role and Status");
+            System.out.println("4. View All Registrations");
+            System.out.println("5. Event Registration Report");
+            System.out.println("6. View System Audit Logs");
+            System.out.println("7. System Overview");
+            System.out.println("8. Logout");
+            int choice = input.readMenuChoice("Enter your choice: ", 1, 8);
 
             try {
                 switch (choice) {
@@ -49,15 +51,18 @@ public class AdminMenu {
                         userMenu.run(user);
                         break;
                     case 3:
-                        viewAllRegistrations(user);
+                        updateUserRoleAndStatus(user);
                         break;
                     case 4:
-                        reportMenu.viewReport(user);
+                        viewAllRegistrations(user);
                         break;
                     case 5:
-                        logMenu.run(user);
+                        reportMenu.viewReport(user);
                         break;
                     case 6:
+                        logMenu.run(user);
+                        break;
+                    case 7:
                         reportMenu.viewSystemOverview(user);
                         break;
                     default:
@@ -69,6 +74,117 @@ public class AdminMenu {
             } catch (SecurityException e) {
                 InputHelper.showAccessDenied(e);
             }
+        }
+    }
+
+    // ---------- Update a user's role and status ----------
+
+    // Shows all users, asks for the target User ID, then the new role and status.
+    // Entering 0 at any step cancels. The admin cannot change their own (active) account.
+    private void updateUserRoleAndStatus(User admin) throws SQLException {
+        InputHelper.header("UPDATE USER ROLE AND STATUS");
+        List<User> users = userDao.findAll(admin, null, null, null);
+        userMenu.showUsers(users);
+        System.out.println("(Enter 0 at any step to cancel.)");
+
+        User target = null;
+        while (target == null) {
+            int targetUserId = readIntInput("Enter the User ID to update: ");
+            if (targetUserId == 0) {
+                System.out.println("Update cancelled.");
+                return;
+            }
+            if (targetUserId == admin.userId()) {
+                System.out.println("WARNING: Modifying the currently active admin account is restricted.");
+                continue;
+            }
+            target = userDao.findById(targetUserId);
+            if (target == null) {
+                System.out.println("No account found with that ID. Please try again.");
+            }
+        }
+        System.out.println("Selected: " + target.username() + " (" + target.fullName() + ") - current role "
+                + target.role() + ", current status " + target.accountStatus());
+
+        String newRole = readValidRole();
+        if (newRole == null) {
+            System.out.println("Update cancelled.");
+            return;
+        }
+        String newStatus = readValidStatus();
+        if (newStatus == null) {
+            System.out.println("Update cancelled.");
+            return;
+        }
+        if (!confirmUpdate(target, newRole, newStatus)) {
+            System.out.println("Update cancelled. No changes were made.");
+            return;
+        }
+        if (userDao.updateUserRoleAndStatus(admin, target.userId(), newRole, newStatus)) {
+            System.out.println("Account updated: " + target.username() + " is now " + newRole + " / " + newStatus + ".");
+        } else {
+            System.out.println("The account no longer exists. No changes were made.");
+        }
+    }
+
+    // Final check before saving. Y saves; N or 0 cancels.
+    private boolean confirmUpdate(User target, String newRole, String newStatus) {
+        System.out.println("Change " + target.username() + ": role " + target.role() + " -> " + newRole
+                + ", status " + target.accountStatus() + " -> " + newStatus);
+        while (true) {
+            String answer = input.readLine("Save this change? (Y/N, 0 to cancel): ");
+            if (answer.equalsIgnoreCase("Y") || answer.equalsIgnoreCase("YES")) {
+                return true;
+            } else if (answer.equalsIgnoreCase("N") || answer.equalsIgnoreCase("NO") || answer.equals("0")) {
+                return false;
+            }
+            System.out.println("Please type Y, N, or 0.");
+        }
+    }
+
+    // ---------- Input validation wrappers ----------
+
+    // Keeps asking until the user types a whole number. Letters and symbols do not crash the program.
+    private int readIntInput(String prompt) {
+        while (true) {
+            String text = input.readLine(prompt);
+            try {
+                return Integer.parseInt(text);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a whole number.");
+            }
+        }
+    }
+
+    // Keeps asking until a valid role is typed (STUDENT, STAFF, ADMIN). Returns null when 0 is entered.
+    private String readValidRole() {
+        while (true) {
+            String text = input.readLine("New role (STUDENT, STAFF, ADMIN, or 0 to cancel): ").toUpperCase();
+            if (text.equals("0")) {
+                return null;
+            }
+            if (text.equals(User.ROLE_STUDENT) || text.equals(User.ROLE_STAFF) || text.equals(User.ROLE_ADMIN)) {
+                return text;
+            }
+            System.out.println("Invalid role. Please type STUDENT, STAFF, or ADMIN.");
+        }
+    }
+
+    // Keeps asking until a valid status is typed. APPROVED is accepted and saved as ACTIVE (the database name for it).
+    // Returns null when 0 is entered.
+    private String readValidStatus() {
+        while (true) {
+            String text = input.readLine("New status (APPROVED, PENDING, INACTIVE, or 0 to cancel): ").toUpperCase();
+            if (text.equals("0")) {
+                return null;
+            }
+            if (text.equals("APPROVED") || text.equals(User.STATUS_ACTIVE)) {
+                return User.STATUS_ACTIVE;
+            }
+            if (text.equals(User.STATUS_PENDING) || text.equals(User.STATUS_INACTIVE)) {
+                return text;
+            }
+            System.out.println("Invalid status. Please type APPROVED, PENDING, or INACTIVE.");
         }
     }
 

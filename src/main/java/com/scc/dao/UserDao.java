@@ -110,34 +110,33 @@ public class UserDao {
     }
 
     public void recordLogin(User user) throws SQLException {
-        logDao.addLog(user.userId(), "Login", null, null);
+        logDao.logAction(user.userId(), "USER_LOGIN", "User " + user.username() + " (ID: " + user.userId() + ") logged in.");
     }
 
     public void recordLogout(User user) throws SQLException {
-        logDao.addLog(user.userId(), "Logout", null, null);
+        logDao.logAction(user.userId(), "USER_LOGOUT", "User " + user.username() + " (ID: " + user.userId() + ") logged out.");
     }
 
     // ---------- Register ----------
 
-    // Saves a new account. The status is PENDING until an admin approves it.
-    // Exception: when the system has no admin yet, the first Admin account is ACTIVE so someone can approve the others.
+    // Saves a new account for any of the three roles (STUDENT, STAFF, ADMIN).
+    // The status is PENDING until an admin approves it.
+    // Exception: while the system has no ACTIVE admin, a new ADMIN account is ACTIVE straight away,
+    // so the very first admin can start the system (otherwise nobody could approve anybody).
     // studentNumber and course are only used when the role is STUDENT (pass null otherwise).
     public User register(String fullName, String contact, String username, String password, String role,
                          String studentNumber, String course) throws SQLException {
-        if (!User.ROLE_STUDENT.equals(role)) { // only students can sign themselves up
-            throw new IllegalArgumentException("Only student accounts can be registered here. Ask an admin for other accounts.");
+        if (!User.ROLE_STUDENT.equals(role) && !User.ROLE_STAFF.equals(role) && !User.ROLE_ADMIN.equals(role)) {
+            throw new IllegalArgumentException("Unknown role.");
         }
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                String status = User.STATUS_PENDING;
-                String note = "";
-                if (role.equals(User.ROLE_ADMIN) && countAdmins(conn) == 0) {
-                    status = User.STATUS_ACTIVE;
-                    note = " - first admin, activated automatically";
-                }
+                String status = User.ROLE_ADMIN.equals(role) && countActiveAdmins(conn) == 0
+                        ? User.STATUS_ACTIVE : User.STATUS_PENDING;
                 int newId = insertUser(conn, fullName, contact, username, password, role, status, studentNumber, course);
-                logDao.addLog(conn, newId, "Account registered: " + username + " (" + role + ")" + note, null, null);
+                logDao.logAction(conn, newId, "USER_REGISTERED",
+                        "Account registered: " + username + " (" + role + ", " + status + ")", null, null);
                 conn.commit();
                 return findById(newId);
             } catch (SQLException e) {
@@ -147,15 +146,7 @@ public class UserDao {
         }
     }
 
-    private int countAdmins(Connection conn) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM users WHERE role = 'ADMIN'");
-             ResultSet rs = ps.executeQuery()) {
-            rs.next();
-            return rs.getInt(1);
-        }
-    }
-
-    // Saves a user row and returns the new user ID. Only the password HASH is saved.
+    // Saves a user row and returns the new user ID. The password is saved exactly as typed.
     private int insertUser(Connection conn, String fullName, String contact, String username, String password,
                            String role, String status, String studentNumber, String course) throws SQLException {
         // Students get their number automatically (example: 2026-001) when none is given.
@@ -205,7 +196,8 @@ public class UserDao {
             try {
                 int newId = insertUser(conn, fullName, contact, username, password, role,
                         User.STATUS_ACTIVE, studentNumber, course);
-                logDao.addLog(conn, actor.userId(), "User account created: " + username + " (" + role + ")", null, null);
+                logDao.logAction(conn, actor.userId(), "USER_CREATED",
+                        "Admin [" + actor.userId() + "] created account: " + username + " (" + role + ")", null, null);
                 conn.commit();
                 return newId;
             } catch (SQLException e) {
@@ -222,14 +214,14 @@ public class UserDao {
                 && !field.equals("course") && !field.equals("student_number")) {
             throw new IllegalArgumentException("This field cannot be edited.");
         }
-        saveField(actor.userId(), target.userId(), field, value,
+        saveField(actor.userId(), target.userId(), field, value, "USER_UPDATED",
                 "User account edited: " + target.username() + " (" + field.replace('_', ' ') + " updated)");
     }
 
     // Admin resets the password of an account.
     public void resetPassword(User actor, User target, String newPassword) throws SQLException {
         Permissions.require(actor, User.ROLE_ADMIN);
-        saveField(actor.userId(), target.userId(), "password_hash", PasswordHasher.hash(newPassword),
+        saveField(actor.userId(), target.userId(), "password_hash", PasswordHasher.hash(newPassword), "USER_UPDATED",
                 "User account edited: " + target.username() + " (password reset)");
     }
 
@@ -242,12 +234,14 @@ public class UserDao {
             throw new IllegalArgumentException("This field cannot be edited.");
         }
         String what = field.equals("password_hash") ? "password" : field.replace('_', ' ');
-        saveField(student.userId(), student.userId(), field, value, "Student profile updated (" + what + ")");
+        saveField(student.userId(), student.userId(), field, value, "PROFILE_UPDATED",
+                "Student profile updated (" + what + ")");
     }
 
     // Updates ONE column and writes the log in the same transaction.
     // The column name is always checked above, never taken directly from user input.
-    private void saveField(int actorId, int targetId, String column, String value, String logText) throws SQLException {
+    private void saveField(int actorId, int targetId, String column, String value, String actionType,
+                           String logText) throws SQLException {
         try (Connection conn = DatabaseConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
@@ -256,7 +250,7 @@ public class UserDao {
                     ps.setInt(2, targetId);
                     ps.executeUpdate();
                 }
-                logDao.addLog(conn, actorId, logText, null, null);
+                logDao.logAction(conn, actorId, actionType, logText, null, null);
                 conn.commit();
             } catch (SQLException e) {
                 conn.rollback();
@@ -267,7 +261,8 @@ public class UserDao {
 
     // Admin approves, rejects, activates, or deactivates an account.
     // Returns false (and changes nothing) when it would leave the system without an active admin.
-    public boolean setStatus(User actor, User target, String newStatus, String logText) throws SQLException {
+    public boolean setStatus(User actor, User target, String newStatus, String actionType, String logText)
+            throws SQLException {
         Permissions.require(actor, User.ROLE_ADMIN);
         try (Connection conn = DatabaseConnection.getConnection()) {
             if (target.isAdmin() && !newStatus.equals(User.STATUS_ACTIVE)
@@ -281,13 +276,123 @@ public class UserDao {
                     ps.setInt(2, target.userId());
                     ps.executeUpdate();
                 }
-                logDao.addLog(conn, actor.userId(), logText, null, null);
+                logDao.logAction(conn, actor.userId(), actionType, logText, null, null);
                 conn.commit();
                 return true;
             } catch (SQLException e) {
                 conn.rollback();
                 throw e;
             }
+        }
+    }
+
+    // Admin approves a PENDING account (status becomes ACTIVE) and logs USER_APPROVED.
+    public boolean approveUser(User actor, User target) throws SQLException {
+        return setStatus(actor, target, User.STATUS_ACTIVE, "USER_APPROVED",
+                "Admin [" + actor.userId() + "] approved User [" + target.userId() + "]");
+    }
+
+    // Admin changes the role and the account status of an account in one step.
+    // Both values are converted to UPPERCASE before they are sent to the database.
+    // This overload also checks the actor is an admin, refuses to change the actor's own account,
+    // and writes activity logs (saved together with the update).
+    // Returns false when no account with that ID exists.
+    public boolean updateUserRoleAndStatus(User actor, int userId, String newRole, String newStatus)
+            throws SQLException {
+        Permissions.require(actor, User.ROLE_ADMIN);
+        if (actor.userId() == userId) {
+            throw new IllegalArgumentException("Modifying the currently active admin account is restricted.");
+        }
+        return saveRoleAndStatus(actor.userId(), userId, newRole, newStatus);
+    }
+
+    // Same update without an actor (no permission check and no logs). Use the overload above from menus.
+    // Runs: UPDATE users SET role = ?, account_status = ? WHERE user_id = ?
+    // (the "roles / status / id" of the requirement are role / account_status / user_id in this database).
+    public boolean updateUserRoleAndStatus(int userId, String newRole, String newStatus) throws SQLException {
+        return saveRoleAndStatus(null, userId, newRole, newStatus);
+    }
+
+    private boolean saveRoleAndStatus(Integer actorId, int userId, String newRole, String newStatus)
+            throws SQLException {
+        if (newRole == null || newStatus == null) {
+            throw new IllegalArgumentException("Role and status are required.");
+        }
+        String role = newRole.trim().toUpperCase();
+        String status = newStatus.trim().toUpperCase();
+        if (!role.equals(User.ROLE_STUDENT) && !role.equals(User.ROLE_STAFF) && !role.equals(User.ROLE_ADMIN)) {
+            throw new IllegalArgumentException("Unknown role.");
+        }
+        if (!status.equals(User.STATUS_PENDING) && !status.equals(User.STATUS_ACTIVE)
+                && !status.equals(User.STATUS_INACTIVE)) {
+            throw new IllegalArgumentException("Unknown status.");
+        }
+        User target = findById(userId);
+        if (target == null) {
+            return false;
+        }
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // A student needs a student number and a course. Give them when the account has none yet.
+                if (role.equals(User.ROLE_STUDENT)) {
+                    if (target.studentNumber() == null || target.studentNumber().isBlank()) {
+                        saveStudentField(conn, userId, "student_number", nextStudentNumber(conn));
+                    }
+                    if (target.course() == null || target.course().isBlank()) {
+                        saveStudentField(conn, userId, "course", "N/A");
+                    }
+                }
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE users SET role = ?, account_status = ? WHERE user_id = ?")) {
+                    ps.setString(1, role);
+                    ps.setString(2, status);
+                    ps.setInt(3, userId);
+                    ps.executeUpdate();
+                }
+                if (actorId != null) {
+                    writeRoleStatusLogs(conn, actorId, target, role, status);
+                }
+                conn.commit();
+                return true;
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            }
+        }
+    }
+
+    // The column name is always written in this file (student_number or course).
+    private void saveStudentField(Connection conn, int userId, String column, String value) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE users SET " + column + " = ? WHERE user_id = ?")) {
+            ps.setString(1, value);
+            ps.setInt(2, userId);
+            ps.executeUpdate();
+        }
+    }
+
+    // Logs what changed: USER_UPDATED for a role / status change, plus USER_APPROVED or USER_REJECTED
+    // when a PENDING account is approved or turned down. Nothing is logged when nothing changed.
+    private void writeRoleStatusLogs(Connection conn, int actorId, User target, String role, String status)
+            throws SQLException {
+        List<String> changes = new ArrayList<>();
+        if (!role.equals(target.role())) {
+            changes.add("role of User " + target.userId() + " to " + role);
+        }
+        if (!status.equals(target.accountStatus())) {
+            changes.add("status of User " + target.userId() + " to " + status);
+        }
+        if (changes.isEmpty()) {
+            return;
+        }
+        logDao.logAction(conn, actorId, "USER_UPDATED",
+                "Admin [" + actorId + "] changed " + String.join(" and ", changes), null, null);
+        if (target.isPending() && status.equals(User.STATUS_ACTIVE)) {
+            logDao.logAction(conn, actorId, "USER_APPROVED",
+                    "Admin [" + actorId + "] approved User [" + target.userId() + "]", null, null);
+        } else if (target.isPending() && status.equals(User.STATUS_INACTIVE)) {
+            logDao.logAction(conn, actorId, "USER_REJECTED",
+                    "Admin [" + actorId + "] rejected User [" + target.userId() + "]", null, null);
         }
     }
 

@@ -5,6 +5,7 @@ import com.scc.model.User;
 import java.sql.SQLException;
 
 /**
+ * Anyone can register as a Student, Event Staff, or Admin; the account stays PENDING until an admin approves it.
  * Handles login, registration, and role routing (1. Login  2. Register  3. Exit).
  * After a successful login it opens the dashboard that matches the user's role.
  * The UserDao and the input (Scanner) are created once in Main and shared with every menu.
@@ -50,22 +51,43 @@ public class Authentication {
 
     // ---------- Register ----------
 
-    // Only students can register here. Staff and admin accounts are created by an admin.
-    // The student number is generated automatically. The new account is PENDING until an admin approves it.
+    // Choose a role (Student, Event Staff, or Admin), then fill in the details.
+    // The new account is PENDING until an admin approves it (see UserDao.register for the first-admin rule).
+    // The student number is generated automatically for students.
     private void register() throws SQLException {
-        InputHelper.header("STUDENT REGISTRATION");
+        InputHelper.header("REGISTRATION");
+        System.out.println("Register as:");
+        System.out.println("1. Student");
+        System.out.println("2. Event Staff");
+        System.out.println("3. Admin");
+        System.out.println("4. Back");
+        int choice = input.readMenuChoice("Enter your choice: ", 1, 4);
+        if (choice == 4) {
+            return;
+        }
+        String role = choice == 1 ? User.ROLE_STUDENT : (choice == 2 ? User.ROLE_STAFF : User.ROLE_ADMIN);
+
         String fullName = input.readNonEmpty("Full Name: ");
         String contact = form.readContact("Contact Number: ");
-        String course = input.readNonEmpty("Course: ");
+        String course = null;
+        if (role.equals(User.ROLE_STUDENT)) {
+            course = input.readNonEmpty("Course: ");
+        }
         String username = form.readNewUsername();
         String password = form.readNewPassword();
 
-        User created = userDao.register(fullName, contact, username, password, User.ROLE_STUDENT, null, course);
+        User created = userDao.register(fullName, contact, username, password, role, null, course);
         System.out.println();
-        System.out.println("Registration successful!");
-        System.out.println("Your Student Number: " + created.studentNumber());
+        System.out.println("Registration successful! Role: " + created.roleLabel());
+        if (created.isStudent()) {
+            System.out.println("Your Student Number: " + created.studentNumber());
+        }
         System.out.println("Account status: " + created.accountStatus());
-        System.out.println("An admin must approve your account before you can log in.");
+        if (created.isActive()) {
+            System.out.println("There was no active admin yet, so this admin account is active. You can log in now.");
+        } else {
+            System.out.println("An admin must approve your account before you can log in.");
+        }
     }
 
     // ---------- Login and logout ----------

@@ -46,13 +46,13 @@ public class ReportMenu {
                 System.out.println("Remaining Slots: " + r.remainingSlots());
                 InputHelper.printDivider();
             }
-            logDao.addLog(actor.userId(), "Report generated: Event Registration Report", null, null);
+            logDao.logAction(actor.userId(), "REPORT_GENERATED", "Report generated: Event Registration Report");
 
             if (!rows.isEmpty() && input.readConfirm("Export this report to a CSV file? (Y/N): ")) {
                 File file = exporter.exportCsv(rows);
                 System.out.println("Report exported successfully.");
                 System.out.println("File: " + file.getAbsolutePath());
-                logDao.addLog(actor.userId(), "Report exported: Event Registration Report (CSV)", null, null);
+                logDao.logAction(actor.userId(), "REPORT_EXPORTED", "Report exported: Event Registration Report (CSV)");
             }
         } catch (SQLException e) {
             InputHelper.showDbError(e);

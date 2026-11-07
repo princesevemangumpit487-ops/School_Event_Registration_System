@@ -1,9 +1,6 @@
 package com.scc.dao;
 
-import com.scc.model.User;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -11,11 +8,10 @@ import java.sql.Statement;
  * Makes sure all database tables exist before the menus start.
  * Main calls initialize() once at startup; it is safe to run on every launch
  * because every statement uses CREATE ... IF NOT EXISTS.
+ * The system starts with NO accounts: the first Admin registers from the Register screen
+ * (see UserDao.register), and every later account is approved by an admin.
  */
 public class DatabaseInitializer {
-    // Default accounts that always exist (created only if the username is not in the database yet).
-    // Students can only self-register; more admins and staff are added by an admin.
-    private static final String DEFAULT_PASSWORD = "1234";
 
     public static void initialize() throws SQLException {
         try (Connection conn = DatabaseConnection.getConnection(); Statement st = conn.createStatement()) {
@@ -53,45 +49,13 @@ public class DatabaseInitializer {
                     + "ON registrations (student_id, event_id) WHERE status IN ('Pending', 'Approved')");
 
             st.execute("CREATE TABLE IF NOT EXISTS activity_logs ("
-                    + "log_id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                    + "user_id INTEGER NOT NULL REFERENCES users(user_id), "
-                    + "action TEXT NOT NULL, "
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE, "
                     + "event_id INTEGER REFERENCES events(event_id), "
                     + "registration_id INTEGER REFERENCES registrations(registration_id) ON DELETE SET NULL, "
+                    + "action_type TEXT NOT NULL, "
+                    + "description TEXT NOT NULL, "
                     + "timestamp TEXT NOT NULL)");
-        }
-        seedDefaultAccounts();
-    }
-
-    // Creates the ready-made Admin and Event Staff accounts (ACTIVE) if they do not exist yet.
-    private static void seedDefaultAccounts() throws SQLException {
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            seedAccount(conn, "System Administrator", "09000000001", "admin", DEFAULT_PASSWORD, User.ROLE_ADMIN);
-            seedAccount(conn, "Event Staff", "09000000002", "staff", DEFAULT_PASSWORD, User.ROLE_STAFF);
-        }
-    }
-
-    private static void seedAccount(Connection conn, String fullName, String contact, String username,
-                                    String password, String role) throws SQLException {
-        try (PreparedStatement check = conn.prepareStatement("SELECT 1 FROM users WHERE username = ?")) {
-            check.setString(1, username);
-            try (ResultSet rs = check.executeQuery()) {
-                if (rs.next()) {
-                    return; // already exists, do nothing
-                }
-            }
-        }
-        String sql = "INSERT INTO users (full_name, contact_number, username, password_hash, role, "
-                + "account_status, created_at, student_number, course) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, fullName);
-            ps.setString(2, contact);
-            ps.setString(3, username);
-            ps.setString(4, PasswordHasher.hash(password));
-            ps.setString(5, role);
-            ps.setString(6, User.STATUS_ACTIVE);
-            ps.setString(7, DatabaseConnection.now());
-            ps.executeUpdate();
         }
     }
 }
