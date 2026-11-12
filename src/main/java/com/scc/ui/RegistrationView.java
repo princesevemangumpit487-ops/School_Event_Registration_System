@@ -3,7 +3,7 @@ package com.scc.ui;
 import com.scc.model.Registration;
 import java.util.List;
 
-/** Prints registrations for students, for staff/admin, and as a detail card. */
+/** Prints registrations for students, for staff/admin, and as a detail table. */
 public class RegistrationView {
 
     public static void printForStudent(List<Registration> list, boolean showDate) {
@@ -11,17 +11,18 @@ public class RegistrationView {
             System.out.println("No registrations found.");
             return;
         }
+        TablePrinter table = showDate
+                ? new TablePrinter("Reg ID", "Event", "Date", "Location", "Registered On", "Status")
+                : new TablePrinter("Reg ID", "Event", "Date", "Location", "Status");
         for (Registration r : list) {
-            System.out.println("Registration ID: " + r.registrationId());
-            System.out.println("Event: " + r.eventName());
-            System.out.println("Date: " + r.eventDate());
-            System.out.println("Location: " + r.location());
             if (showDate) {
-                System.out.println("Registered On: " + r.registrationDate());
+                table.addRow(r.registrationId(), r.eventName(), r.eventDate(), r.location(),
+                        r.registrationDate(), r.status());
+            } else {
+                table.addRow(r.registrationId(), r.eventName(), r.eventDate(), r.location(), r.status());
             }
-            System.out.println("Registration Status: " + r.status());
-            InputHelper.printDivider();
         }
+        table.print();
         System.out.println("Registrations shown: " + list.size());
     }
 
@@ -30,27 +31,25 @@ public class RegistrationView {
             System.out.println("No registrations found.");
             return;
         }
+        TablePrinter table = new TablePrinter("Reg ID", "Student", "Student No.", "Event", "Status");
         for (Registration r : list) {
-            System.out.println("Registration ID: " + r.registrationId());
-            System.out.println("Student: " + r.studentName());
-            System.out.println("Student Number: " + r.studentNumber());
-            System.out.println("Event: " + r.eventName());
-            System.out.println("Status: " + r.status());
-            InputHelper.printDivider();
+            table.addRow(r.registrationId(), r.studentName(), r.studentNumber(), r.eventName(), r.status());
         }
+        table.print();
         System.out.println("Registrations shown: " + list.size());
     }
 
     public static void printDetails(Registration r) {
         InputHelper.header("REGISTRATION DETAILS");
-        System.out.println("Registration ID: " + r.registrationId());
-        System.out.println("Student: " + r.studentName());
-        System.out.println("Student Number: " + r.studentNumber());
-        System.out.println("Course: " + (r.course() == null ? "N/A" : r.course()));
-        System.out.println("Event: " + r.eventName());
-        System.out.println("Event Date: " + r.eventDate());
-        System.out.println("Location: " + r.location());
-        System.out.println("Registered On: " + r.registrationDate());
-        System.out.println("Status: " + r.status());
+        TablePrinter.printFields(
+                "Registration ID", r.registrationId(),
+                "Student", r.studentName(),
+                "Student Number", r.studentNumber(),
+                "Course", r.course() == null ? "N/A" : r.course(),
+                "Event", r.eventName(),
+                "Event Date", r.eventDate(),
+                "Location", r.location(),
+                "Registered On", r.registrationDate(),
+                "Status", r.status());
     }
 }

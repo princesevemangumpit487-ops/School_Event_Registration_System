@@ -1,17 +1,27 @@
 package com.scc.dao;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Makes sure all database tables exist before the menus start.
  * Main calls initialize() once at startup; it is safe to run on every launch
  * because every statement uses CREATE ... IF NOT EXISTS.
- * The system starts with NO accounts: the first Admin registers from the Register screen
- * (see UserDao.register), and every later account is approved by an admin.
+ * It also seeds a default Admin account (username "admin") the first time the system runs,
+ * and hashes any old plain-text passwords. Every later account is approved by an admin.
+ * Change the password after the first login (Manage Users -> Reset Password).
  */
 public class DatabaseInitializer {
+    // Default admin created automatically when no "admin" account exists yet.
+    private static final String DEFAULT_ADMIN_USERNAME = "admin";
+    private static final String DEFAULT_ADMIN_PASSWORD = "admin123";
+    private static final String DEFAULT_ADMIN_NAME = "System Administrator";
+    private static final String DEFAULT_ADMIN_CONTACT = "N/A";
 
     public static void initialize() throws SQLException {
         try (Connection conn = DatabaseConnection.getConnection(); Statement st = conn.createStatement()) {
@@ -56,6 +66,53 @@ public class DatabaseInitializer {
                     + "action_type TEXT NOT NULL, "
                     + "description TEXT NOT NULL, "
                     + "timestamp TEXT NOT NULL)");
+
+            hashPlainTextPasswords(conn);
+            seedDefaultAdmin(conn);
+        }
+    }
+
+    // Creates the default admin only if that username does not exist yet (never overwrites an account).
+    private static void seedDefaultAdmin(Connection conn) throws SQLException {
+        try (PreparedStatement check = conn.prepareStatement("SELECT 1 FROM users WHERE username = ?")) {
+            check.setString(1, DEFAULT_ADMIN_USERNAME);
+            try (ResultSet rs = check.executeQuery()) {
+                if (rs.next()) {
+                    return;
+                }
+            }
+        }
+        String sql = "INSERT INTO users (full_name, contact_number, username, password_hash, role, "
+                + "account_status, created_at) VALUES (?, ?, ?, ?, 'ADMIN', 'ACTIVE', ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, DEFAULT_ADMIN_NAME);
+            ps.setString(2, DEFAULT_ADMIN_CONTACT);
+            ps.setString(3, DEFAULT_ADMIN_USERNAME);
+            ps.setString(4, PasswordHasher.hash(DEFAULT_ADMIN_PASSWORD)); // saved hashed, never as plain text
+            ps.setString(5, DatabaseConnection.now());
+            ps.executeUpdate();
+        }
+    }
+
+    // Old accounts may still have a plain-text password (for example "123"). Hash them once;
+    // the password stays the same, so those users can still log in with it.
+    private static void hashPlainTextPasswords(Connection conn) throws SQLException {
+        List<Object[]> toUpdate = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT user_id, password_hash FROM users")) {
+            while (rs.next()) {
+                String stored = rs.getString(2);
+                if (!PasswordHasher.isHashed(stored)) {
+                    toUpdate.add(new Object[]{rs.getInt(1), stored});
+                }
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE users SET password_hash = ? WHERE user_id = ?")) {
+            for (Object[] row : toUpdate) {
+                ps.setString(1, PasswordHasher.hash((String) row[1]));
+                ps.setInt(2, (Integer) row[0]);
+                ps.executeUpdate();
+            }
         }
     }
 }

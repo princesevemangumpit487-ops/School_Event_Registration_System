@@ -11,31 +11,29 @@ public class EventView {
             System.out.println("No events found.");
             return;
         }
-        for (Event event : events) {
-            printEvent(event);
+        TablePrinter table = new TablePrinter("ID", "Event", "Date", "Location", "Capacity",
+                "Approved", "Available", "Status");
+        for (Event e : events) {
+            table.addRow(e.eventId(), e.eventName(), e.eventDate(), e.location(), e.capacity(),
+                    e.approvedCount(), e.availableSlots(), e.availabilityText());
         }
+        table.print();
         System.out.println("Events shown: " + events.size());
     }
 
+    // One event shown as a one-row table (used when editing or removing an event).
     public static void printEvent(Event e) {
-        System.out.println("Event ID: " + e.eventId());
-        System.out.println("Event: " + e.eventName());
-        System.out.println("Date: " + e.eventDate());
-        System.out.println("Location: " + e.location());
-        System.out.println("Capacity: " + e.capacity());
-        System.out.println("Approved Participants: " + e.approvedCount());
-        System.out.println("Available Slots: " + e.availableSlots());
-        System.out.println("Status: " + e.availabilityText());
-        InputHelper.printDivider();
+        printList(java.util.List.of(e));
     }
 
     public static void printFull(Event e) {
         InputHelper.header("EVENT FULL");
         System.out.println("This event has reached its maximum capacity.");
         System.out.println();
-        System.out.println("Capacity: " + e.capacity());
-        System.out.println("Approved Participants: " + e.approvedCount());
-        System.out.println("Available Slots: " + e.availableSlots());
+        TablePrinter.printFields(
+                "Capacity", e.capacity(),
+                "Approved Participants", e.approvedCount(),
+                "Available Slots", e.availableSlots());
         System.out.println();
     }
 }

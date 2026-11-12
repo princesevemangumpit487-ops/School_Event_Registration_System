@@ -96,10 +96,11 @@ public class StudentMenu {
         }
 
         System.out.println();
-        System.out.println("Event: " + event.eventName());
-        System.out.println("Date: " + event.eventDate());
-        System.out.println("Location: " + event.location());
-        System.out.println("Available Slots: " + event.availableSlots());
+        TablePrinter.printFields(
+                "Event", event.eventName(),
+                "Date", event.eventDate(),
+                "Location", event.location(),
+                "Available Slots", event.availableSlots());
         System.out.println();
         if (!input.readConfirm("Register for this event? (Y/N): ")) {
             System.out.println("Registration cancelled.");
@@ -165,11 +166,12 @@ public class StudentMenu {
         boolean back = false;
         while (!back) {
             InputHelper.header("MY PROFILE");
-            System.out.println("Student Number: " + user.studentNumber());
-            System.out.println("Username: " + user.username());
-            System.out.println("Name: " + user.fullName());
-            System.out.println("Contact: " + user.contactNumber());
-            System.out.println("Course: " + user.course());
+            TablePrinter.printFields(
+                    "Student Number", user.studentNumber(),
+                    "Username", user.username(),
+                    "Name", user.fullName(),
+                    "Contact", user.contactNumber(),
+                    "Course", user.course());
             System.out.println();
             System.out.println("1. Change Name");
             System.out.println("2. Change Contact Number");

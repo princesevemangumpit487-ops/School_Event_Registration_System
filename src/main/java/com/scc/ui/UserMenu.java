@@ -110,16 +110,12 @@ public class UserMenu {
             System.out.println("No accounts found.");
             return;
         }
-        System.out.println(String.format("%-5s %-14s %-22s %-12s %-9s %s",
-                "ID", "Username", "Full Name", "Role", "Status", "Details"));
-        InputHelper.printDivider();
+        TablePrinter table = new TablePrinter("ID", "Username", "Full Name", "Role", "Status", "Details");
         for (User u : users) { // password hashes are never shown
             String details = u.isStudent() ? u.studentNumber() + " | " + u.course() : "Contact: " + u.contactNumber();
-            System.out.println(String.format("%-5d %-14s %-22s %-12s %-9s %s",
-                    u.userId(), u.username(), InputHelper.cut(u.fullName(), 22), u.roleLabel(),
-                    u.accountStatus(), details));
+            table.addRow(u.userId(), u.username(), u.fullName(), u.roleLabel(), u.accountStatus(), details);
         }
-        InputHelper.printDivider();
+        table.print();
         System.out.println("Accounts shown: " + users.size());
     }
 

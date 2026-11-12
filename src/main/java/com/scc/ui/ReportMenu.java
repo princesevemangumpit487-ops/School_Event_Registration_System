@@ -30,21 +30,14 @@ public class ReportMenu {
             if (rows.isEmpty()) {
                 System.out.println("No events to report.");
             }
-            for (EventReportRow r : rows) {
-                System.out.println("Event: " + r.eventName());
-                System.out.println("Date: " + r.eventDate());
-                System.out.println("Location: " + r.location());
-                System.out.println("Capacity: " + r.capacity());
-                System.out.println();
-                System.out.println("Total Registrations: " + r.total());
-                System.out.println();
-                System.out.println("Approved : " + r.approved());
-                System.out.println("Pending  : " + r.pending());
-                System.out.println("Rejected : " + r.rejected());
-                System.out.println("Cancelled: " + r.cancelled());
-                System.out.println();
-                System.out.println("Remaining Slots: " + r.remainingSlots());
-                InputHelper.printDivider();
+            if (!rows.isEmpty()) {
+                TablePrinter table = new TablePrinter("Event", "Date", "Location", "Capacity", "Total",
+                        "Approved", "Pending", "Rejected", "Cancelled", "Remaining");
+                for (EventReportRow r : rows) {
+                    table.addRow(r.eventName(), r.eventDate(), r.location(), r.capacity(), r.total(),
+                            r.approved(), r.pending(), r.rejected(), r.cancelled(), r.remainingSlots());
+                }
+                table.print();
             }
             logDao.logAction(actor.userId(), "REPORT_GENERATED", "Report generated: Event Registration Report");
 
@@ -75,32 +68,40 @@ public class ReportMenu {
             System.out.println("User accounts:");
             List<String[]> users = reportDao.countUsersByRoleAndStatus(actor);
             if (users.isEmpty()) {
-                System.out.println("  (none)");
-            }
-            for (String[] row : users) {
-                System.out.println(String.format("  %-9s %-9s %s", row[0], row[1], row[2]));
+                System.out.println("(none)");
+            } else {
+                TablePrinter table = new TablePrinter("Role", "Status", "Count");
+                for (String[] row : users) {
+                    table.addRow((Object[]) row);
+                }
+                table.print();
             }
 
             System.out.println();
             System.out.println("Events:");
             List<String[]> events = reportDao.countEventsByStatus(actor);
             if (events.isEmpty()) {
-                System.out.println("  (none)");
-            }
-            for (String[] row : events) {
-                System.out.println(String.format("  %-9s %s", row[0], row[1]));
+                System.out.println("(none)");
+            } else {
+                TablePrinter table = new TablePrinter("Status", "Count");
+                for (String[] row : events) {
+                    table.addRow((Object[]) row);
+                }
+                table.print();
             }
 
             System.out.println();
             System.out.println("Registrations by status:");
             List<String[]> registrations = reportDao.countRegistrationsByStatus(actor);
             if (registrations.isEmpty()) {
-                System.out.println("  (none)");
+                System.out.println("(none)");
+            } else {
+                TablePrinter table = new TablePrinter("Status", "Count");
+                for (String[] row : registrations) {
+                    table.addRow((Object[]) row);
+                }
+                table.print();
             }
-            for (String[] row : registrations) {
-                System.out.println(String.format("  %-10s %s", row[0], row[1]));
-            }
-
             System.out.println();
             String[] logs = reportDao.logSummary(actor);
             System.out.println("Activity log entries: " + logs[0] + (logs[1] == null ? "" : " (latest: " + logs[1] + ")"));
@@ -111,12 +112,16 @@ public class ReportMenu {
             if (rows.isEmpty()) {
                 System.out.println("No events found.");
             }
-            for (EventReportRow r : rows) {
-                int percent = r.capacity() > 0 ? (r.approved() * 100) / r.capacity() : 0;
-                String status = r.remainingSlots() > 0 ? "AVAILABLE" : "FULL";
-                System.out.println(r.eventName() + " (ID " + r.eventId() + ")");
-                System.out.println("  Approved: " + r.approved() + " / " + r.capacity() + " (" + percent
-                        + "% full)  Available Slots: " + r.remainingSlots() + "  [" + status + "]");
+            if (!rows.isEmpty()) {
+                TablePrinter table = new TablePrinter("ID", "Event", "Approved", "Capacity", "% Full",
+                        "Available", "Status");
+                for (EventReportRow r : rows) {
+                    int percent = r.capacity() > 0 ? (r.approved() * 100) / r.capacity() : 0;
+                    String status = r.remainingSlots() > 0 ? "AVAILABLE" : "FULL";
+                    table.addRow(r.eventId(), r.eventName(), r.approved(), r.capacity(), percent + "%",
+                            r.remainingSlots(), status);
+                }
+                table.print();
             }
         } catch (SQLException e) {
             InputHelper.showDbError(e);

@@ -65,8 +65,9 @@ public class RegistrationMenu {
         RegistrationView.printDetails(reg);
         Event event = eventDao.findActiveById(reg.eventId());
         if (event != null) {
-            System.out.println("Capacity: " + event.capacity());
-            System.out.println("Available Slots: " + event.availableSlots());
+            TablePrinter.printFields(
+                    "Capacity", event.capacity(),
+                    "Available Slots", event.availableSlots());
         }
     }
 
@@ -118,11 +119,8 @@ public class RegistrationMenu {
         while (!done) {
             Registration reg = registrationDao.findById(staff, id); // reload to show the saved values
             System.out.println();
-            System.out.println("Registration ID: " + reg.registrationId());
-            System.out.println("Student: " + reg.studentName());
-            System.out.println("Event: " + reg.eventName());
-            System.out.println("Registered On: " + reg.registrationDate());
-            System.out.println("Status: " + reg.status());
+            RegistrationView.printForStaff(java.util.List.of(reg));
+            TablePrinter.printFields("Registered On", reg.registrationDate());
             System.out.println();
             System.out.println("1. Change Registration Date");
             System.out.println("2. Change Status");
@@ -206,22 +204,23 @@ public class RegistrationMenu {
             return;
         }
         InputHelper.header(event.eventName().toUpperCase() + " PARTICIPANTS");
-        System.out.println("Event: " + event.eventName());
-        System.out.println("Location: " + event.location());
-        System.out.println("Capacity: " + event.capacity());
-        System.out.println("Approved Participants: " + event.approvedCount());
-        System.out.println("Available Slots: " + event.availableSlots());
-        InputHelper.printDivider();
+        TablePrinter.printFields(
+                "Event", event.eventName(),
+                "Location", event.location(),
+                "Capacity", event.capacity(),
+                "Approved Participants", event.approvedCount(),
+                "Available Slots", event.availableSlots());
 
         List<Registration> participants = registrationDao.findApprovedByEvent(staff, eventId);
         if (participants.isEmpty()) {
             System.out.println("No approved participants yet.");
-        }
-        int number = 1;
-        for (Registration r : participants) {
-            System.out.println(number + ". " + r.studentName());
-            System.out.println("   Student No: " + r.studentNumber() + " | Course: " + (r.course() == null ? "N/A" : r.course()));
-            number++;
+        } else {
+            TablePrinter table = new TablePrinter("No.", "Student Name", "Student No.", "Course");
+            int number = 1;
+            for (Registration r : participants) {
+                table.addRow(number++, r.studentName(), r.studentNumber(), r.course() == null ? "N/A" : r.course());
+            }
+            table.print();
         }
         InputHelper.printLine();
     }

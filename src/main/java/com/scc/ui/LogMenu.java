@@ -4,14 +4,11 @@ import com.scc.dao.ActivityLogDao;
 import com.scc.model.ActivityLog;
 import com.scc.model.User;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.List;
 
 /** The admin's System Audit Log viewer (read only). */
 public class LogMenu {
     private static final int DESCRIPTION_WIDTH = 35;
-    private static final String ROW_FORMAT = "%-5s | %-8s | %-18s | %-35s | %-20s";
-    private static final String DIVIDER = "-".repeat(98); // width of one table row
 
     private final InputHelper input;
     private final ActivityLogDao logDao = new ActivityLogDao();
@@ -76,8 +73,8 @@ public class LogMenu {
             System.out.println("No activity records found.");
             return;
         }
-        System.out.println(String.format(ROW_FORMAT, "ID", "User ID", "Action Type", "Description", "Timestamp"));
-        System.out.println(DIVIDER);
+        TablePrinter table = new TablePrinter("ID", "User ID", "Action Type", "Description", "Timestamp")
+                .maxWidth(3, DESCRIPTION_WIDTH);
         for (ActivityLog log : logs) {
             String description = log.description();
             if (log.eventId() != null && !description.contains("Event #" + log.eventId())) {
@@ -86,45 +83,11 @@ public class LogMenu {
             if (log.registrationId() != null && !description.contains("Registration #" + log.registrationId())) {
                 description += " [Reg #" + log.registrationId() + "]";
             }
-            List<String> lines = wrap(description, DESCRIPTION_WIDTH);
-            for (int i = 0; i < lines.size(); i++) {
-                if (i == 0) {
-                    System.out.println(String.format(ROW_FORMAT, log.logId(), log.userId(), log.actionType(),
-                            lines.get(i), log.timestamp()));
-                } else {
-                    System.out.println(String.format(ROW_FORMAT, "", "", "", lines.get(i), ""));
-                }
-            }
+            table.addRow(log.logId(), log.userId(), log.actionType(), description, log.timestamp());
         }
-        System.out.println(DIVIDER);
+        table.print();
         System.out.println("Records shown: " + logs.size() + " (most recent first)");
     }
 
-    // Splits text into lines of at most "width" characters, breaking at spaces when possible.
-    private static List<String> wrap(String text, int width) {
-        List<String> lines = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        for (String word : text.split(" ")) {
-            while (word.length() > width) { // a single very long word is cut
-                if (line.length() > 0) {
-                    lines.add(line.toString());
-                    line.setLength(0);
-                }
-                lines.add(word.substring(0, width));
-                word = word.substring(width);
-            }
-            if (line.length() > 0 && line.length() + 1 + word.length() > width) {
-                lines.add(line.toString());
-                line.setLength(0);
-            }
-            if (line.length() > 0) {
-                line.append(' ');
-            }
-            line.append(word);
-        }
-        if (line.length() > 0 || lines.isEmpty()) {
-            lines.add(line.toString());
-        }
-        return lines;
-    }
+
 }
